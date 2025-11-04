@@ -1,8 +1,8 @@
 Package: LongitudinalSmarter
 Type: Package
 Title: Comprehensive Longitudinal Mixed-Effects Models for Microbiome Data
-Version: 0.1.0
-Authors@R: person("Your", "Name", email = "your.email@example.com", role = c("aut", "cre"))
+Version: 0.2.0
+Authors@R: person("Leran", "Wang", email = "leranwang10@gmail.com", role = c("aut", "cre"))
 Description: Provides a streamlined workflow for fitting mixed-effects models to
     longitudinal microbiome data (presence/absence and abundance). Automatically
     extracts reference group trajectories, non-reference group trajectories, and
@@ -25,6 +25,7 @@ Imports:
     broom.mixed (>= 0.2.0),
     emmeans (>= 1.5.0),
     forcats (>= 0.5.0),
+    edgeR (>= 3.30.0),
     rlang (>= 0.4.0),
     stats
 Suggests:

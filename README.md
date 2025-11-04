@@ -8,9 +8,11 @@
 
 ### What does it do?
 
-Given presence/absence or abundance data across timepoints and diagnosis groups, the package:
+Given **presence/absence** or **count/abundance** data across timepoints and diagnosis groups, the package:
 
 1. **Fits mixed-effects models** for each feature (gene/contig/OTU/ASV)
+   - Logistic regression for presence/absence data
+   - Negative binomial, Poisson, or zero-inflated models for count data
 2. **Extracts reference group trajectory** (e.g., CONTROL over time)
 3. **Extracts non-reference group trajectory** (e.g., CELIAC over time)
 4. **Extracts between-group contrasts** at each timepoint
@@ -42,12 +44,14 @@ devtools::install("path/to/LongitudinalSmarter")
 
 ## Quick Start
 
+### Presence/Absence Analysis
+
 ```r
 library(LongitudinalSmarter)
 
-# Fit comprehensive longitudinal model
-results <- fit_longitudinal_PA(
-  PA_matrix = my_PA_data,               # features × samples
+# Fit comprehensive longitudinal PA model
+results_PA <- fit_longitudinal_PA(
+  PA_matrix = my_PA_data,               # features × samples (0/1)
   metadata = my_metadata,                # samples × variables
   dx_var = "Dx.Status",                  # "CONTROL" vs "CELIAC"
   timepoint_var = "onset_timeline_combined",  # "t0", "t0-6", etc.
@@ -56,19 +60,64 @@ results <- fit_longitudinal_PA(
 )
 
 # View significant results
-results$combined %>% filter(p.adj < 0.05)
+results_PA$combined %>% filter(p.adj < 0.05)
 
 # Generate heatmaps
 plots <- plot_longitudinal_heatmaps(
-  df = results$combined,
+  df = results_PA$combined,
   tp_levels = c("t0-6", "t0-12", "t0-18", "t0-24"),
   fdr = 0.05
 )
 ```
 
+### Abundance/Count Analysis
+
+```r
+# Option 1: Create PA matrix from count data first
+PA_matrix <- create_PA_matrix(
+  count_matrix = my_count_data,
+  target_cpm = 0.5,         # CPM threshold
+  min_reads_floor = 3       # Minimum read count
+)
+
+# Option 2: Analyze abundance directly with negative binomial models
+results_abundance <- fit_longitudinal_abundance(
+  count_matrix = my_count_data,         # features × samples (counts)
+  metadata = my_metadata,
+  dx_var = "Dx.Status",
+  timepoint_var = "onset_timeline_combined",
+  covariates = c("Country", "Sex", "Age"),
+  random_var = "patientID",
+  family = "nbinom2"          # negative binomial type 2
+)
+
+# Results include IRR (Incidence Rate Ratios) instead of OR
+results_abundance$combined %>% filter(p.adj < 0.05)
+```
+
 ---
 
 ## Features
+
+### Two Analysis Types
+
+**1. Presence/Absence (PA) Analysis** - `fit_longitudinal_PA()`
+- Binary logistic regression
+- Returns Odds Ratios (OR)
+- Best for: sparse features, detection/occurrence questions
+
+**2. Abundance/Count Analysis** - `fit_longitudinal_abundance()`
+- Negative binomial, Poisson, or zero-inflated models
+- Returns Incidence Rate Ratios (IRR)
+- Best for: count data, quantitative abundance questions
+- Supported families:
+  - `nbinom2`: Negative binomial type 2 (default, recommended)
+  - `nbinom1`: Negative binomial type 1
+  - `poisson`: Poisson regression
+  - `truncated_nbinom2`: Truncated negative binomial
+  - `zipoisson`: Zero-inflated Poisson
+  - `zinbinom2`: Zero-inflated negative binomial type 2
+  - `zinbinom1`: Zero-inflated negative binomial type 1
 
 ### Comprehensive Contrast Extraction
 
@@ -76,6 +125,8 @@ The package fits a single mixed-effects model per feature:
 
 ```
 PA ~ Dx.Status × Timepoint + Covariates + (1|PatientID)
+# or
+Count ~ Dx.Status × Timepoint + Covariates + (1|PatientID)
 ```
 
 From this model, it automatically extracts:
@@ -147,7 +198,7 @@ The `plot_longitudinal_heatmaps()` function:
 
 ## Output Structure
 
-The `fit_longitudinal_PA()` function returns a list with:
+Both `fit_longitudinal_PA()` and `fit_longitudinal_abundance()` return a list with:
 
 ```r
 results$main_model       # Main model terms (reference + interactions)
@@ -157,6 +208,7 @@ results$combined         # All results combined
 results$n_features       # Number of features analyzed
 results$n_converged      # Number of successful model fits
 results$failed_features  # Features where models failed
+results$model_family     # Model family used
 ```
 
 Each results table contains:
@@ -169,7 +221,8 @@ Each results table contains:
 - `p.value`: Raw p-value
 - `p.adj`: FDR-adjusted p-value
 - `conf.low`, `conf.high`: Confidence interval
-- `OR`: Odds ratio (for PA models)
+- `OR`: Odds ratio (PA models only)
+- `IRR`: Incidence rate ratio (abundance models only)
 - `source`: Which contrast type
 
 ---
@@ -218,7 +271,35 @@ results$combined %>%
   head(10)
 ```
 
-### Example 4: Custom Heatmaps
+### Example 4: Abundance Analysis with Different Models
+
+```r
+# Compare different model families
+models_to_test <- c("nbinom2", "poisson", "zipoisson")
+
+abundance_results <- lapply(models_to_test, function(fam) {
+  fit_longitudinal_abundance(
+    count_matrix = my_counts,
+    metadata = my_metadata,
+    dx_var = "Dx.Status",
+    timepoint_var = "onset_timeline_combined",
+    random_var = "patientID",
+    family = fam,
+    verbose = FALSE
+  )
+})
+names(abundance_results) <- models_to_test
+
+# Compare convergence rates
+sapply(abundance_results, function(x) x$n_converged)
+
+# Compare number of significant results
+sapply(abundance_results, function(x) {
+  sum(x$combined$p.adj < 0.05, na.rm = TRUE)
+})
+```
+
+### Example 5: Custom Heatmaps
 
 ```r
 # Create heatmaps with custom settings
@@ -243,7 +324,7 @@ ggsave("heatmap_celiac.pdf", plots$`TP (CELIAC)`, width = 10, height = 8)
 
 For presence/absence data, the package fits:
 
-```
+```r
 glmmTMB(PA ~ Dx.Status * Timepoint + Covariates + (1|PatientID),
         family = binomial(link = "logit"))
 ```
@@ -252,6 +333,42 @@ glmmTMB(PA ~ Dx.Status * Timepoint + Covariates + (1|PatientID),
 - **Fixed effects**: Diagnosis, timepoint, interaction, covariates
 - **Random effect**: Patient-specific intercept
 - **Estimates**: Log-odds (exponentiate for odds ratios)
+
+### Mixed-Effects Models for Count Data (Abundance)
+
+For count/abundance data, the package fits:
+
+```r
+glmmTMB(Count ~ Dx.Status * Timepoint + Covariates + (1|PatientID),
+        family = nbinom2())  # or other families
+```
+
+**Recommended families by data type**:
+- **nbinom2** (default): Best for most microbiome count data with overdispersion
+- **poisson**: Use when variance ≈ mean (rare in microbiome data)
+- **zipoisson/zinbinom2**: Use when excess zeros beyond what's expected from the count distribution
+- **truncated_nbinom2**: Use when zero counts are structurally impossible
+
+**Estimates**: Log-rate (exponentiate for incidence rate ratios)
+
+### Helper Function: create_PA_matrix()
+
+Converts count data to presence/absence using TMM normalization:
+
+```r
+PA_matrix <- create_PA_matrix(
+  count_matrix = my_counts,
+  target_cpm = 0.5,           # CPM threshold
+  min_reads_floor = 3,        # Minimum raw count
+  normalization_method = "TMMwsp"  # TMM for sparse data
+)
+```
+
+A feature is "present" if **both** conditions are met:
+- Normalized CPM ≥ target_cpm
+- Raw count ≥ min_reads_floor
+
+This prevents calling rare features "present" due to normalization artifacts.
 
 ### Why emmeans?
 
