@@ -1,13 +1,14 @@
 Package: LongitudinalSmarter
 Type: Package
 Title: Comprehensive Longitudinal Mixed-Effects Models for Microbiome Data
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: person("Leran", "Wang", email = "leranwang10@gmail.com", role = c("aut", "cre"))
 Description: Provides a streamlined workflow for fitting mixed-effects models to
     longitudinal microbiome data (presence/absence and abundance). Automatically
     extracts reference group trajectories, non-reference group trajectories, and
     between-group contrasts at each timepoint. Includes visualization tools for
-    generating heatmaps of significant results.
+    generating heatmaps of significant results. Interactive dashboard helps users
+    select appropriate statistical models based on data characteristics.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -31,5 +32,6 @@ Imports:
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    shiny (>= 1.7.0)
 VignetteBuilder: knitr

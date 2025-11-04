@@ -44,6 +44,28 @@ devtools::install("path/to/LongitudinalSmarter")
 
 ## Quick Start
 
+### NEW: Interactive Model Selection Dashboard
+
+Not sure which model to use? Launch the interactive dashboard:
+
+```r
+library(LongitudinalSmarter)
+
+# Launch dashboard to upload and diagnose your data
+launch_model_selector()
+
+# Or diagnose data programmatically
+diagnosis <- diagnose_data(my_count_matrix)
+diagnosis  # View recommendations
+diagnosis$plots$mean_variance  # View diagnostic plots
+```
+
+The dashboard will:
+- Analyze your data characteristics (sparsity, overdispersion, zero-inflation)
+- Recommend appropriate models with clear rationale
+- Generate diagnostic plots
+- Provide ready-to-use R code
+
 ### Presence/Absence Analysis
 
 ```r
@@ -118,6 +140,77 @@ results_abundance$combined %>% filter(p.adj < 0.05)
   - `zipoisson`: Zero-inflated Poisson
   - `zinbinom2`: Zero-inflated negative binomial type 2
   - `zinbinom1`: Zero-inflated negative binomial type 1
+
+### Diagnostic Tools (NEW in v0.3.0)
+
+**1. Interactive Dashboard** - `launch_model_selector()`
+- Upload your data through a web interface
+- Get instant model recommendations
+- View diagnostic plots interactively
+- Copy ready-to-use R code
+
+```r
+# Launch the dashboard
+launch_model_selector()
+
+# Or pre-load your data
+launch_model_selector(data_matrix = my_counts, metadata = my_metadata)
+```
+
+**2. Programmatic Diagnostics** - `diagnose_data()`
+- Analyze data characteristics automatically
+- Get model recommendations with rationale
+- Generate diagnostic plots
+- Access detailed metrics
+
+```r
+# Diagnose your data
+diagnosis <- diagnose_data(my_count_matrix)
+
+# View recommendations
+print(diagnosis)
+
+# Access diagnostic plots
+diagnosis$plots$mean_variance      # Mean-variance relationship
+diagnosis$plots$zero_distribution  # Zero proportion distribution
+diagnosis$plots$example_distributions  # Sample feature distributions
+
+# Access detailed metrics
+diagnosis$diagnostics$overdispersion
+diagnosis$diagnostics$zero_inflation
+```
+
+**What the diagnostics detect:**
+- **Data type**: Automatically identifies PA vs count data
+- **Sparsity**: Calculates zero proportions across features
+- **Overdispersion**: Tests if variance > mean (nbinom2 vs poisson)
+- **Zero-inflation**: Detects excess zeros beyond expected (zero-inflated models)
+- **Prevalence**: For PA data, identifies rare vs common features
+
+**Example output:**
+```
+==============================================
+LongitudinalSmarter Data Diagnosis
+==============================================
+Data Type: count
+Features: 1000
+Samples: 50
+
+RECOMMENDATIONS
+Analysis Type: Count/Abundance
+Primary Function: fit_longitudinal_abundance()
+Recommended Model Families: nbinom2
+
+Rationale:
+  • Strong overdispersion detected (ratio: 5.2)
+  • Recommend: family = 'nbinom2' (negative binomial)
+
+Next Steps:
+  1. Start with the recommended family
+  2. Check convergence rate (aim for >80%)
+  3. Compare with alternative families if unsure
+==============================================
+```
 
 ---
 
