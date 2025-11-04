@@ -119,6 +119,162 @@ results_abundance$combined %>% filter(p.adj < 0.05)
   - `zinbinom2`: Zero-inflated negative binomial type 2
   - `zinbinom1`: Zero-inflated negative binomial type 1
 
+---
+
+## Model Selection Guide
+
+### Should I use PA or Abundance analysis?
+
+**Use Presence/Absence (PA) analysis when:**
+- Your data is very sparse (many zeros)
+- You care about detection/occurrence rather than quantity
+- You want to answer: "Is this feature more/less likely to be present?"
+- Features have highly variable counts that don't correlate with biological signal
+- You're analyzing amplicon data (16S, ITS) where counts may be unreliable
+
+**Use Abundance analysis when:**
+- You have count data with meaningful quantitative information
+- You care about changes in abundance, not just presence
+- You want to answer: "Does this feature increase/decrease in abundance?"
+- You're analyzing shotgun metagenomic or RNA-seq data
+- Features show consistent abundance patterns across replicates
+
+**Not sure? Do both!** PA and abundance analyses often reveal complementary insights.
+
+### Which model family for abundance analysis?
+
+#### Quick Decision Tree:
+
+```
+START: Do you have count data?
+  │
+  ├─ YES → Are there many zeros (>40% of values)?
+  │   │
+  │   ├─ YES → Are zeros more than expected by chance?
+  │   │   │
+  │   │   ├─ YES → Use zero-inflated models (zipoisson or zinbinom2)
+  │   │   └─ NO  → Use nbinom2 (default)
+  │   │
+  │   └─ NO → Use nbinom2 (default)
+  │
+  └─ NO → Use fit_longitudinal_PA() instead
+```
+
+#### Detailed Model Selection:
+
+**1. Start with nbinom2 (default, recommended for most cases)**
+- **When**: Most microbiome count data
+- **Why**: Handles overdispersion (variance > mean), which is nearly universal in microbiome data
+- **Interpretation**: IRR = multiplicative change in expected count
+
+```r
+results <- fit_longitudinal_abundance(
+  count_matrix = my_counts,
+  metadata = my_metadata,
+  dx_var = "Dx.Status",
+  timepoint_var = "timepoint",
+  random_var = "patientID",
+  family = "nbinom2"  # Start here!
+)
+```
+
+**2. Consider poisson only if:**
+- Your mean ≈ variance (very rare in microbiome data)
+- You have theoretical reasons to expect equidispersion
+- **Check**: Compare nbinom2 vs poisson - if results are similar, data may fit Poisson
+
+**3. Use zero-inflated models (zipoisson, zinbinom2) when:**
+- You have **excess zeros** beyond what the count distribution predicts
+- Biological zeros (true absence) mixed with sampling zeros (not detected)
+- Examples: Host-associated microbes (truly absent in some individuals)
+
+**How to detect excess zeros:**
+```r
+# Calculate proportion of zeros
+zero_prop <- rowMeans(my_counts == 0)
+hist(zero_prop, main = "Distribution of zero proportions across features")
+
+# If many features have >50% zeros, consider zero-inflated models
+```
+
+**4. Use zinbinom2 over zipoisson when:**
+- You have excess zeros AND overdispersion
+- Most common choice for zero-inflated microbiome data
+- More flexible than zipoisson
+
+**5. Use truncated_nbinom2 when:**
+- Zero counts are structurally impossible (e.g., analysis restricted to features that must be present)
+- Very rare in practice
+
+**6. nbinom1 vs nbinom2:**
+- **nbinom2** (default): Variance = μ + μ²/θ (quadratic mean-variance)
+- **nbinom1**: Variance = μ × φ (linear mean-variance)
+- Use nbinom1 if you have theoretical reasons, but nbinom2 is more common
+
+### How to compare models empirically
+
+```r
+# Fit multiple models
+families <- c("nbinom2", "poisson", "zinbinom2")
+
+model_comparison <- lapply(families, function(fam) {
+  fit_longitudinal_abundance(
+    count_matrix = my_counts,
+    metadata = my_metadata,
+    dx_var = "Dx.Status",
+    timepoint_var = "timepoint",
+    random_var = "patientID",
+    family = fam,
+    verbose = FALSE
+  )
+})
+names(model_comparison) <- families
+
+# Compare convergence (higher is better)
+sapply(model_comparison, function(x) x$n_converged)
+
+# Compare number of significant results
+sapply(model_comparison, function(x) {
+  sum(x$combined$p.adj < 0.05, na.rm = TRUE)
+})
+
+# Check for features that are significant in one model but not another
+sig_nbinom2 <- model_comparison$nbinom2$combined %>%
+  filter(p.adj < 0.05) %>%
+  pull(feature_id) %>%
+  unique()
+
+sig_zinbinom2 <- model_comparison$zinbinom2$combined %>%
+  filter(p.adj < 0.05) %>%
+  pull(feature_id) %>%
+  unique()
+
+# Features only significant in zero-inflated model
+setdiff(sig_zinbinom2, sig_nbinom2)
+```
+
+### General Recommendations
+
+**For most microbiome studies:**
+1. **Default**: Use `family = "nbinom2"` for abundance
+2. **High zeros**: If >50% zeros across many features, try `zinbinom2`
+3. **Always check**: Compare convergence rates and inspect failed features
+
+**Red flags:**
+- Many convergence failures (>20%) → Data may be too sparse, consider PA analysis
+- Huge differences between models → Data may not fit assumptions, interpret cautiously
+- All p-values identical across models → Problem with data or model specification
+
+### Reporting your choice
+
+When publishing, report:
+1. Which model family you used
+2. Why you chose it (e.g., "nbinom2 selected due to overdispersion")
+3. Convergence rate (e.g., "95% of features converged")
+4. Sensitivity analysis if relevant (e.g., "Results robust to choice of poisson vs nbinom2")
+
+---
+
 ### Comprehensive Contrast Extraction
 
 The package fits a single mixed-effects model per feature:
