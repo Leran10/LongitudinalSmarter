@@ -32,7 +32,7 @@ Given presence/absence or abundance data across timepoints and diagnosis groups,
 
 ```r
 # Install from GitHub (requires devtools)
-# devtools::install_github("username/LongitudinalSmarter")
+devtools::install_github("Leran10/LongitudinalSmarter")
 
 # Or install locally
 devtools::install("path/to/LongitudinalSmarter")
@@ -340,9 +340,9 @@ MIT License - see LICENSE file
 
 ## Contact
 
-- **Issues**: [GitHub Issues](https://github.com/username/LongitudinalSmarter/issues)
-- **Author**: [Your Name]
-- **Email**: your.email@example.com
+- **Issues**: [GitHub Issues](https://github.com/Leran10/LongitudinalSmarter/issues)
+- **Author**: Leran Wang
+- **Email**: leranwang10@gmail.com
 
 ---
 
